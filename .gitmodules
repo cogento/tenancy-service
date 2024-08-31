@@ -1,0 +1,3 @@
+[submodule "app/shared"]
+	path = app/shared
+	url = https://github.com/cogento/core-shared
