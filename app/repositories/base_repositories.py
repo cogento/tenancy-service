@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from cogento_core.db.models import CompanyIndustry
 from cogento_core.db.models import User, Company
 from cogento_core.db.repository import AbstractRepository
 
@@ -16,11 +15,15 @@ class UserRepository(AbstractRepository, ABC):
         pass
 
     @abstractmethod
-    def get_by_company(self, company_id: int) -> List[User]:
+    def list(self, company_id: int) -> List[User]:
         pass
 
     @abstractmethod
-    def create(self, user: User) -> User:
+    def create_user_if_not_exists(self, user: User) -> User:
+        pass
+
+    @abstractmethod
+    def update_attrs(self, user_id: int, first_name: str, last_name: str):
         pass
 
 
@@ -30,23 +33,15 @@ class CompanyRepository(AbstractRepository, ABC):
         pass
 
     @abstractmethod
-    def get_by_name(self, name: str) -> Company:
+    def update_attrs(
+            self,
+            company_id: int,
+            friendly_name: str = None,
+            industry_id: int = None,
+            estimated_revenue: float = None
+    ):
         pass
 
     @abstractmethod
-    def update_descriptors(self, company_id: int, estimated_revenue: float = None) -> Company:
-        pass
-
-    @abstractmethod
-    def update(self, company: Company) -> Company:
-        pass
-
-    @abstractmethod
-    def create(self, company: Company) -> Company:
-        pass
-
-
-class CompanyIndustryRepository(AbstractRepository, ABC):
-    @abstractmethod
-    def list(self) -> List[CompanyIndustry]:
+    def create_company(self, company: Company) -> Company:
         pass

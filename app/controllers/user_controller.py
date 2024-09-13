@@ -1,8 +1,11 @@
+from typing import List
+
 from cogento_core.db.models import User
 from fastapi import APIRouter, Depends
+from starlette import status
+
 from repositories.base_repositories import UserRepository
 from repositories.user_repository import SqlUserRepository
-from starlette import status
 
 router = APIRouter(
     prefix="/user",
@@ -17,7 +20,7 @@ router = APIRouter(
     status_code=status.HTTP_200_OK,
     response_model=User
 )
-def get_user(user_id: int, user_repo: UserRepository = Depends(SqlUserRepository.get)) -> User:
+async def get_user(user_id: int, user_repo: UserRepository = Depends(SqlUserRepository)) -> User:
     """
     Get a user by id
     :return: user
@@ -32,7 +35,7 @@ def get_user(user_id: int, user_repo: UserRepository = Depends(SqlUserRepository
     status_code=status.HTTP_200_OK,
     response_model=User
 )
-def get_user_by_email(email: str, user_repo: UserRepository = Depends(SqlUserRepository.get)) -> User:
+async def get_user_by_email(email: str, user_repo: UserRepository = Depends(SqlUserRepository)) -> User:
     """
     Get a user by email
     :return: user
@@ -47,26 +50,27 @@ def get_user_by_email(email: str, user_repo: UserRepository = Depends(SqlUserRep
     status_code=status.HTTP_200_OK,
     response_model=User
 )
-def list_users(company_id: int, user_repo: UserRepository = Depends(SqlUserRepository.get)) -> User:
+async def list_users(company_id: int, user_repo: UserRepository = Depends(SqlUserRepository)) -> List[User]:
     """
     Get all users by company id
     :return: users
     """
-    return user_repo.get_by_company(company_id=company_id)
+    return user_repo.list(company_id=company_id)
 
 
 @router.post(
-    path="/",
-    operation_id="create_user",
-    description="Create User",
+    path="/confirm",
+    operation_id="confirm_user",
+    description="Confirm User",
     status_code=status.HTTP_201_CREATED,
     response_model=User
 )
-def create_user(user: User, user_repo: UserRepository = Depends(SqlUserRepository.get)) -> User:
+async def create_user(user: User, user_repo: UserRepository = Depends(SqlUserRepository)) -> User:
     """
     Create a user
     :param user:
     :param user_repo:
     :return:
     """
-    return user_repo.create(user=user)
+
+    return user_repo.create_user_if_not_exists(user=user)
