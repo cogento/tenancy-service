@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from starlette import status
 
 from models.request_models import CreateCompanyRequest, UpdateCompanyRequest
-from models.response_models import InvitedUserConfirmation
+from models.response_models import InvitedUserConfirmation, CreatedCompanyConfirmation
 from repositories.base_repositories import CompanyRepository
 from repositories.company_repository import SqlCompanyRepository
 from services.auth0_service import Auth0Provider
@@ -36,7 +36,7 @@ async def get_company_by_id(
 
 @router.post(
     "/",
-    response_model=Company,
+    response_model=CreatedCompanyConfirmation,
     status_code=status.HTTP_201_CREATED,
     operation_id="create_company"
 )
@@ -45,7 +45,7 @@ async def create_company(
         company_repo: CompanyRepository = Depends(SqlCompanyRepository),
         auth0_provider: Auth0Provider = gm.depends(Auth0Provider),
         stripe_provider: StripeService = gm.depends(StripeService),
-) -> Company:
+) -> CreatedCompanyConfirmation:
     """
     Create a new company with the given details. This will provision a new customer in
     Stripe, an organization in Auth0, and a new company in the database.
@@ -59,22 +59,34 @@ async def create_company(
     logger.info("Provisioned organization {} in Auth0 with ID {}", company.friendly_name, auth0_organization_id)
     company.auth0_organization_id = auth0_organization_id
     logger.info("Provisioning company {} in Stripe", company.friendly_name)
-    stripe_customer_id = stripe_provider.customers.create(
-        name=company.friendly_name,
-        email=company.email,
-        address=stripe_provider.customers.CreateParamsAddress(
-            city=company.city,
-            country=company.country,
-            line1=create_company_request.billing_info.address_line1,
-            line2=create_company_request.billing_info.address_line2,
-            postal_code=company.postal_code,
-            state=company.state
-        )
-    ).id
-    logger.info("Provisioned company {} in Stripe with ID {}", company.friendly_name, stripe_customer_id)
-    company.stripe_customer_id = stripe_customer_id
+    try:
+        stripe_customer_id = stripe_provider.customers.create(dict(
+            name=company.friendly_name,
+            email=create_company_request.billing_info.billing_email,
+            address=stripe_provider.customers.CreateParamsAddress(
+                city=create_company_request.billing_info.city,
+                country=create_company_request.billing_info.country,
+                line1=create_company_request.billing_info.address_line1,
+                line2=create_company_request.billing_info.address_line2,
+                postal_code=create_company_request.billing_info.zip_code,
+                state=create_company_request.billing_info.state
+            ))
+        ).id
+        logger.info("Provisioned company {} in Stripe with ID {}", company.friendly_name, stripe_customer_id)
+        company.stripe_customer_id = stripe_customer_id
+    except Exception as e:
+        logger.error("Failed to provision company {} in Stripe: {}", company.friendly_name, str(e))
+        logger.info("Deleting organization {} in Auth0", company.friendly_name)
+        auth0_provider.delete_organization(organization_name=company.name)
+        raise
+
     company_repo.create_company(company)
-    return company
+
+    return CreatedCompanyConfirmation(
+        company_id=company.company_id,
+        friendly_name=company.friendly_name,
+        internal_name=company.name
+    )
 
 
 @router.put(
@@ -123,8 +135,8 @@ async def invite_user(
     )
 
     return InvitedUserConfirmation(
-        user_invitation_id=0,
+        user_invitation_id=response['id'],
         organization_id=company_id,
-        invite_url=response['invite_url'],
-        expires_at="2021-12-31T23:59:59Z"
+        invite_url=response['invitation_url'],
+        expires_at=response['expires_at']
     )

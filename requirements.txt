@@ -1,5 +1,1 @@
-fastapi==0.112.2
-pydantic==1.8.2
-fastapi-utils[session]==0.7.0
-requests==2.32.3
-starlette==0.38.2
+stripe==9.9.0

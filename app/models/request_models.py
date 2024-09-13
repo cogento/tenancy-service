@@ -2,8 +2,6 @@ from pydantic import BaseModel, Field
 
 from cogento_core.db.models import Company
 
-from cogento_core.enums import CompanyClassification
-
 
 class BillingInfo(BaseModel):
     address_line1: str = Field(..., description="Address line 1")
@@ -16,29 +14,16 @@ class BillingInfo(BaseModel):
 
 
 class CreateCompanyRequest(BaseModel):
-    name: str = Field(..., description="Company name")
     friendly_name: str = Field(..., description="Friendly name")
-    industry_id: int = Field(..., gt=0, description="Industry ID")
     estimated_revenue: float = Field(..., gt=0, description="Estimated revenue (millions)")
     billing_info: BillingInfo = Field(..., description="Billing information")
 
-    def get_classification(self):
-        if self.estimated_revenue < 1.0:  # million
-            return CompanyClassification.SMALL
-        elif self.estimated_revenue < 10.0:
-            return CompanyClassification.MEDIUM
-        elif self.estimated_revenue < 100.0:
-            return CompanyClassification.LARGE
-        else:
-            return CompanyClassification.ENTERPRISE
-
     def to_company(self) -> Company:
         return Company(
-            name=self.name,
+            name=self.friendly_name.replace(" ", "-").lower(),
             friendly_name=self.friendly_name,
-            industry_id=self.industry_id,
             estimated_revenue=self.estimated_revenue,
-            classification=self.get_classification()
+            billing_email=self.billing_info.billing_email
         )
 
 

@@ -16,6 +16,7 @@ class Auth0Provider(GlobalObject):
     def __init__(self, app_settings: AppSettings):
         super().__init__()
         self._client_id = app_settings.auth0_client_id
+        self._platform_client_id = app_settings.auth0_platform_client_id
         self._client_secret = app_settings.auth0_client_secret
         self._auth0_domain = app_settings.auth0_domain
         self._access_token = None
@@ -57,6 +58,44 @@ class Auth0Provider(GlobalObject):
             logger.info(f"New access token expires at {self._access_token_expiration}")
         return self._access_token
 
+    def _get_headers(self):
+        return {
+            "content-type": "application/json",
+            "authorization": f"Bearer {self.get_access_token()}"
+        }
+
+    def _get_url(self, path: str):
+        return f"https://{self._auth0_domain}/api/v2/{path}"
+
+    def _validate_response(self, response):
+        if not response.ok:
+            logger.error(f"Error response from Auth0: {response.text}")
+        response.raise_for_status()
+
+    def get_organization_by_name(self, organization_name: str):
+        """
+        Get an organization by name from Auth0
+        :param organization_name: organization name
+        :return: organization
+        """
+        logger.info(f"Getting organization {organization_name}")
+        url = self._get_url(f"organizations/name/{organization_name}")
+        response = requests.get(url, headers=self._get_headers())
+        self._validate_response(response)
+        return response.json()
+
+    def delete_organization(self, organization_name: str):
+        """
+        Delete an organization from Auth0
+        :param organization_name: organization name
+        """
+        logger.warning(f"Deleting organization {organization_name}")
+        org_id = self.get_organization_by_name(organization_name)["id"]
+        delete_url = self._get_url(f"organizations/{org_id}")
+        response = requests.delete(delete_url, headers=self._get_headers())
+        self._validate_response(response)
+        logger.info(f"Deleted organization {organization_name}")
+
     def create_organization(self, organization_name: str, organization_display_name: str):
         """
         Create an organization in Auth0
@@ -65,19 +104,16 @@ class Auth0Provider(GlobalObject):
         :return: organization id
         """
         logger.info(f"Creating organization {organization_name}")
-        url = f"https://{self._auth0_domain}/api/v2/organizations"
-        headers = {
-            "content-type": "application/json",
-            "authorization": f"Bearer {self.get_access_token()}"
-        }
+        url = self._get_url("organizations")
+
         data = {
             "name": organization_name,
             "display_name": organization_display_name
         }
-        response = requests.post(url, headers=headers, data=json.dumps(data))
-        response.raise_for_status()
+        response = requests.post(url, headers=self._get_headers(), data=json.dumps(data))
+        self._validate_response(response)
         logger.info(f"Created organization {organization_name}")
-        return response.json()['organization_id']
+        return response.json()['id']
 
     def invite_user(self, organization_id: str, organization_name: str, email: str):
         """
@@ -89,10 +125,6 @@ class Auth0Provider(GlobalObject):
         """
         logger.info(f"Inviting user {email} to organization {organization_name}")
         url = f"https://{self._auth0_domain}/api/v2/organizations/{organization_id}/invitations"
-        headers = {
-            "content-type": "application/json",
-            "authorization": f"Bearer {self.get_access_token()}"
-        }
         data = {
             "inviter": {
                 "name": organization_name
@@ -100,12 +132,10 @@ class Auth0Provider(GlobalObject):
             "invitee": {
                 "email": email
             },
-            "connection": "Username-Password-Authentication",
-            "app_metadata": {
-                "email_verified": True
-            }
+            "client_id": self._platform_client_id,
+            "send_invitation_email": True
         }
-        response = requests.post(url, headers=headers, data=json.dumps(data))
-        response.raise_for_status()
+        response = requests.post(url, headers=self._get_headers(), data=json.dumps(data))
+        self._validate_response(response)
         logger.info(f"Invited user {email} to organization {organization_name}")
         return response.json()
